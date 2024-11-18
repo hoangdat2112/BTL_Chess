@@ -11,27 +11,24 @@ import com.google.android.material.button.MaterialButton;
 
 public class ProfileActivity extends AppCompatActivity {
 
-    private TextView tvUsername, tvElo, tvRanking, tvTotalGames, tvWins, tvLosses, tvDraws, tvWinRate;
+    private TextView tvUsername, tvElo, tvTotalGames, tvWins, tvLosses, tvDraws, tvWinRate;
     private MaterialButton btnPlayWithComputer, btnPlayWithHuman;
-
-    private ProfileService profileService;
+    private DBHelper dbHelper;
+    private String username;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_profile);
-
-        profileService = new ProfileService(this);
-
         initViews();
-        loadProfileData();
+        loadUserData();
         setupListeners();
     }
 
     private void initViews() {
+        username =getIntent().getStringExtra("username");
         tvUsername = findViewById(R.id.tvUsername);
         tvElo = findViewById(R.id.tvElo);
-        tvRanking = findViewById(R.id.tvRanking);
         tvTotalGames = findViewById(R.id.tvTotalGames);
         tvWins = findViewById(R.id.tvWins);
         tvLosses = findViewById(R.id.tvLosses);
@@ -39,21 +36,23 @@ public class ProfileActivity extends AppCompatActivity {
         tvWinRate = findViewById(R.id.tvWinRate);
         btnPlayWithComputer = findViewById(R.id.btnPlayWithComputer);
         btnPlayWithHuman = findViewById(R.id.btnPlayWithHuman);
+        dbHelper = new DBHelper(this);
     }
 
-    private void loadProfileData() {
-        ProfileService.ProfileData data = profileService.getProfileData();
+    private void loadUserData() {
+        User user = dbHelper.getUserByUsername(username);
 
-        tvUsername.setText(data.username);
-        tvElo.setText("Elo: " + data.elo);
-        tvRanking.setText("Ranking: #" + data.ranking);
-        tvTotalGames.setText("Total: " + data.totalGames);
-        tvWins.setText("Wins: " + data.wins);
-        tvLosses.setText("Losses: " + data.losses);
-        tvDraws.setText("Draws: " + data.draws);
+        if (user != null) {
+            tvUsername.setText(user.getUsername());
+            tvElo.setText("Elo: " + user.getElo());
+            tvTotalGames.setText("Games Played: " + user.getGamesPlayed());
+            tvWins.setText("Games Won: " + user.getGamesWon());
+            tvLosses.setText("Games Lost: " + user.getGamesLost());
+            tvDraws.setText("Games Drawn: " + user.getGamesDrawn());
 
-        float winRate = data.totalGames > 0 ? (float) data.wins / data.totalGames * 100 : 0;
-        tvWinRate.setText(String.format("Win Rate: %.1f%%", winRate));
+            int winRate = (user.getGamesPlayed() > 0) ? (user.getGamesWon() * 100) / user.getGamesPlayed() : 0;
+            tvWinRate.setText("Winrate: " + winRate + "%");
+        }
     }
 
     private void setupListeners() {

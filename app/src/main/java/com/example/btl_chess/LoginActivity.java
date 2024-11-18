@@ -34,6 +34,7 @@ public class LoginActivity extends AppCompatActivity {
            if(dbHelper.checkLogin(username,password)){
                Toast.makeText(this, "Login Successful", Toast.LENGTH_SHORT).show();
                Intent intent = new Intent(LoginActivity.this, ProfileActivity.class);
+               intent.putExtra("username", username);
                startActivity(intent);
            }
            else{
