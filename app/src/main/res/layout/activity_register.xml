@@ -103,19 +103,14 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
         android:text="Already have an account? Login here!!!"
+        android:textColor="@android:color/holo_blue_dark"
+        android:textStyle="bold"
+        android:padding="8dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:height="48dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/btnRegister" />
-
-    <Button
-        android:id="@+id/btnBackToLogin"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="Back to Login"
-        style="@style/Widget.MaterialComponents.Button.TextButton"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tvLoginPrompt" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

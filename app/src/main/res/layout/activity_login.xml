@@ -69,19 +69,17 @@
 
     <!-- Register Prompt -->
     <TextView
-        android:id="@+id/tvRegisterPrompt"
+        android:id="@+id/tvGotoRegister"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:text="Don't have an account? Register here!!!" />
+        android:text="Don't have an account? Register here!!!"
+        android:textColor="@android:color/holo_blue_dark"
+        android:textStyle="bold"
+        android:padding="8dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:height="48dp"/>
 
-    <!-- Register Button -->
-    <Button
-        android:id="@+id/btnRegister"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="Register"
-        style="@style/Widget.MaterialComponents.Button.TextButton" />
 
 </LinearLayout>
