@@ -30,7 +30,10 @@ public class ChessView extends View {
     private Set<Square> hintSquares = new HashSet<>();
     private final int hintColor = Color.parseColor("#80FF0000");
     private final int checkColor = Color.parseColor("#FFFF00");
-
+    /*private final int lightColor = Color.parseColor("#EEEEEE");
+    private final int darkColor = Color.parseColor("#333333");*/
+    private final int lightPieceColor = Color.parseColor("#FFFFFF");
+    private final int darkPieceColor = Color.parseColor("#CCCCCC");
     private Set<Integer> imgResIDs = Set.of(
             R.drawable.bishop_black,
             R.drawable.bishop_white,
@@ -57,10 +60,17 @@ public class ChessView extends View {
     private float movingPieceY = -1f;
 
     private ChessDelegate chessDelegate;
+    private boolean isBlackSide = false;
+    private boolean isPlayingBlack = false;
+    private Player currentPlayer = Player.WHITE;
 
     public ChessView(Context context, AttributeSet attrs) {
         super(context, attrs);
         loadBitmaps();
+    }
+    public void setBlackSide(boolean blackSide) {
+        this.isBlackSide = blackSide;
+        invalidate(); // Vẽ lại bàn cờ khi thay đổi góc nhìn
     }
 
     @Override
@@ -83,7 +93,6 @@ public class ChessView extends View {
         if (showHints) {
             drawHints(canvas);
         }
-
         drawPieces(canvas);
     }
     private void drawHints(Canvas canvas) {
@@ -100,45 +109,52 @@ public class ChessView extends View {
 
     }
 
-     @Override
+
+    @Override
     public boolean onTouchEvent(MotionEvent event) {
         if (event == null) return false;
 
-        // Tính toán vị trí cột và hàng từ tọa độ chạm
         float eventX = event.getX();
         float eventY = event.getY();
 
-        // Kiểm tra xem người dùng có chạm ngoài bàn cờ không
+
+
+        // Check for clicks outside the chessboard
         if (eventX < originX || eventX > originX + 8 * cellSide ||
                 eventY < originY || eventY > originY + 8 * cellSide) {
-            // Nếu đang di chuyển quân cờ và thả ra ngoài bàn cờ, hủy nước đi
             if (event.getAction() == MotionEvent.ACTION_UP && movingPiece != null) {
                 movingPiece = null;
                 movingPieceBitmap = null;
-                clearHints(); // Xóa hints khi hủy nước đi
+                clearHints();
                 invalidate();
             }
             return true;
         }
 
+        // Calculate square position based on view perspective
+        int col = (int)((eventX - originX) / cellSide);
+        int row = 7 - (int)((eventY - originY) / cellSide);
+
+        // Adjust coordinates based on perspective (black/white)
+        if (isBlackSide) {
+            col = 7 - col;
+            row = 7 - row;
+        }
+
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
-                // Tính toán ô được chọn
-                fromCol = (int) ((eventX - originX) / cellSide);
-                fromRow = 7 - (int) ((eventY - originY) / cellSide);
+                fromCol = col;
+                fromRow = row;
 
-                // Kiểm tra tính hợp lệ của ô
                 if (fromCol >= 0 && fromCol < 8 && fromRow >= 0 && fromRow < 8) {
                     if (chessDelegate != null) {
                         ChessPiece piece = chessDelegate.pieceAt(new Square(fromCol, fromRow));
                         if (piece != null) {
-                            // Lưu thông tin quân cờ đang di chuyển
                             movingPiece = piece;
                             movingPieceBitmap = bitmaps.get(piece.getResID());
                             movingPieceX = eventX;
                             movingPieceY = eventY;
 
-                            // Cập nhật và hiển thị hints nếu tính năng được bật
                             if (showHints) {
                                 updateHints(new Square(fromCol, fromRow));
                             }
@@ -150,7 +166,6 @@ public class ChessView extends View {
 
             case MotionEvent.ACTION_MOVE:
                 if (movingPiece != null) {
-                    // Cập nhật vị trí của quân cờ đang di chuyển
                     movingPieceX = eventX;
                     movingPieceY = eventY;
                     invalidate();
@@ -159,39 +174,25 @@ public class ChessView extends View {
 
             case MotionEvent.ACTION_UP:
                 if (movingPiece != null) {
-                    // Tính toán ô đích
-                    int toCol = (int) ((eventX - originX) / cellSide);
-                    int toRow = 7 - (int) ((eventY - originY) / cellSide);
+                    int toCol = col;
+                    int toRow = row;
 
-                    // Kiểm tra tính hợp lệ của ô đích
                     if (toCol >= 0 && toCol < 8 && toRow >= 0 && toRow < 8) {
                         Square toSquare = new Square(toCol, toRow);
-
-                        // Kiểm tra xem nước đi có nằm trong hints không
                         boolean isValidMove = !showHints || hintSquares.contains(toSquare);
 
                         if (fromCol != toCol || fromRow != toRow) {
                             if (chessDelegate != null && isValidMove) {
-                                // Thực hiện nước đi
                                 chessDelegate.movePiece(new Square(fromCol, fromRow), toSquare);
                             }
                         }
                     }
 
-                    // Reset trạng thái
                     movingPiece = null;
                     movingPieceBitmap = null;
-                    clearHints(); // Xóa hints sau khi di chuyển
+                    clearHints();
                     invalidate();
                 }
-                break;
-
-            case MotionEvent.ACTION_CANCEL:
-                // Hủy nước đi khi có sự kiện cancel
-                movingPiece = null;
-                movingPieceBitmap = null;
-                clearHints();
-                invalidate();
                 break;
         }
 
@@ -220,7 +221,11 @@ public class ChessView extends View {
         for (int row = 0; row < 8; row++) {
             for (int col = 0; col < 8; col++) {
                 if (chessDelegate != null) {
-                    ChessPiece piece = chessDelegate.pieceAt(new Square(col, row));
+                    // Adjust coordinates based on perspective
+                    int adjustedRow = isBlackSide ? row : 7 - row;
+                    int adjustedCol = isBlackSide ? 7 - col : col;
+
+                    ChessPiece piece = chessDelegate.pieceAt(new Square(adjustedCol, adjustedRow));
                     if (piece != null && !piece.equals(movingPiece)) {
                         drawPieceAt(canvas, col, row, piece.getResID());
                     }
@@ -228,13 +233,13 @@ public class ChessView extends View {
             }
         }
 
+        // Draw moving piece
         if (movingPieceBitmap != null) {
             canvas.drawBitmap(movingPieceBitmap, null,
                     new RectF(movingPieceX - cellSide / 2, movingPieceY - cellSide / 2,
                             movingPieceX + cellSide / 2, movingPieceY + cellSide / 2), paint);
         }
     }
-
     private void drawPieceAt(Canvas canvas, int col, int row, int resID) {
         Bitmap bitmap = bitmaps.get(resID);
         if (bitmap != null) {
@@ -254,7 +259,10 @@ public class ChessView extends View {
     private void drawChessboard(Canvas canvas) {
         for (int row = 0; row < 8; row++) {
             for (int col = 0; col < 8; col++) {
-                drawSquareAt(canvas, col, row, (col + row) % 2 == 1);
+                // Tính toán màu ô dựa trên vị trí
+                boolean isDark = (col + row) % 2 == 1;
+                // Vẽ ô cờ với vị trí đã được điều chỉnh theo góc nhìn
+                drawSquareAt(canvas, col, row, isDark);
             }
         }
     }
@@ -268,4 +276,5 @@ public class ChessView extends View {
     public void setChessDelegate(ChessDelegate chessDelegate) {
         this.chessDelegate = chessDelegate;
     }
+
 }

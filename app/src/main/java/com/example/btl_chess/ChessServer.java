@@ -1,4 +1,5 @@
 package com.example.btl_chess;//package com.example.btl_chess;
+
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
@@ -60,36 +61,67 @@ public class ChessServer {
             }
         }
 
-        public void sendMove(String move) {
-            out.println(move);
+        public void sendMessage(String message) {
+            if (out != null) {
+                out.println(message);
+            }
         }
 
         @Override
         public void run() {
             try {
                 while (in.hasNextLine()) {
-                    String move = in.nextLine();
-                    System.out.println("Nhận được nước đi từ " + playerName + ": " + move);
+                    String input = in.nextLine();
+                    System.out.println("Nhận được dữ liệu từ " + playerName + ": " + input);
 
-                    // Chuyển tiếp nước đi đến người chơi kia
-                    if (this == player1 && player2 != null) {
-                        player2.sendMove(move);
-                    } else if (this == player2 && player1 != null) {
-                        player1.sendMove(move);
+                    // Xử lý tin nhắn chat và nước đi
+                    if (input.startsWith("CHAT:")) {
+                        // Chuyển tiếp tin nhắn chat
+                        forwardMessage(input, this);
+                    } else {
+                        // Chuyển tiếp nước đi
+                        forwardMove(input, this);
                     }
                 }
             } finally {
                 try {
                     socket.close();
-                    if (this == player1) {
-                        player1 = null;
-                    } else if (this == player2) {
-                        player2 = null;
-                    }
-                    System.out.println(playerName + " đã ngắt kết nối");
+                    handleDisconnect(this);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
+            }
+        }
+    }
+
+    private void forwardMessage(String message, ClientHandler sender) {
+        ClientHandler recipient = (sender == player1) ? player2 : player1;
+        if (recipient != null) {
+            recipient.sendMessage(message);
+            System.out.println("Chuyển tiếp tin nhắn từ " + sender.playerName + " đến " + recipient.playerName);
+        }
+    }
+
+    private void forwardMove(String move, ClientHandler sender) {
+        ClientHandler recipient = (sender == player1) ? player2 : player1;
+        if (recipient != null) {
+            recipient.sendMessage(move);
+            System.out.println("Chuyển tiếp nước đi từ " + sender.playerName + " đến " + recipient.playerName);
+        }
+    }
+
+    private void handleDisconnect(ClientHandler disconnectedPlayer) {
+        if (disconnectedPlayer == player1) {
+            System.out.println("Player 1 đã ngắt kết nối");
+            player1 = null;
+            if (player2 != null) {
+                player2.sendMessage("OPPONENT_DISCONNECTED");
+            }
+        } else if (disconnectedPlayer == player2) {
+            System.out.println("Player 2 đã ngắt kết nối");
+            player2 = null;
+            if (player1 != null) {
+                player1.sendMessage("OPPONENT_DISCONNECTED");
             }
         }
     }

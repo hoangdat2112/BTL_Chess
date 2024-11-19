@@ -38,6 +38,8 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
     private EditText messageInput;
     private StringBuilder chatHistory;
     private Button chatButton;
+    private boolean isPlayingBlack = false;
+    private Socket clientSocket = null;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -46,7 +48,7 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
         // Initialize game components
         chessGame = new ChessGame();
         chessView = findViewById(R.id.chess_view);
-        chessView.setShowHints(true);
+        chessView.setShowHints(false);
         chessView.setChessDelegate(this);
         // Initialize chat components
         chatLayout = findViewById(R.id.chat_layout);
@@ -68,8 +70,13 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
             closeServerSocket();
         });
 
+
         connectButton.setOnClickListener(v -> {
             Log.d(TAG, "Socket client connecting...");
+            // Disable button while connecting
+            connectButton.setEnabled(false);
+            connectButton.setText("Connecting...");
+
             Executors.newSingleThreadExecutor().execute(() -> connectToServer());
         });
 
@@ -83,36 +90,52 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
     }
     private void connectToServer() {
         try {
-            Socket socket = new Socket(SOCKET_HOST, SOCKET_PORT);
-            receiveData(socket);
-            runOnUiThread(() -> {
-                Toast.makeText(this, "Connected successfully!", Toast.LENGTH_SHORT).show();
-                connectButton.setEnabled(false);
-                appendMessage("System: Connected to opponent");
-            });
-        } catch (ConnectException e) {
-            runOnUiThread(() -> {
-                Toast.makeText(this, "Connection failed", Toast.LENGTH_SHORT).show();
-                connectButton.setEnabled(true);
-            });
-        } catch (IOException e) {
-            e.printStackTrace();
-            runOnUiThread(() -> connectButton.setEnabled(true));
-        }
-    }
-    private void receiveData(Socket socket) {
-        try {
-            Scanner scanner = new Scanner(socket.getInputStream());
-            printWriter = new PrintWriter(socket.getOutputStream(), true);
+            clientSocket = new Socket(SOCKET_HOST, SOCKET_PORT);
+            Scanner scanner = new Scanner(clientSocket.getInputStream());
+            printWriter = new PrintWriter(clientSocket.getOutputStream(), true);
 
+            // Đợi tin nhắn chào từ server
+            String welcomeMsg = scanner.nextLine();
+            Log.d(TAG, "Server welcome message: " + welcomeMsg);
+
+            // Cập nhật UI dựa trên màu được gán
+            runOnUiThread(() -> {
+                if (welcomeMsg.contains("BLACK")) {
+                    isPlayingBlack = true;
+                    chessView.setBlackSide(true);
+                    chessGame.setCurrentPlayer(Player.WHITE); // Bắt đầu với lượt trắng
+
+                } else {
+                    isPlayingBlack = false;
+                    chessView.setBlackSide(false);
+                    chessGame.setCurrentPlayer(Player.WHITE); // Bắt đầu với lượt trắng
+
+                }
+
+                // Vẽ lại bàn cờ với hướng mới
+                chessView.invalidate();
+
+                // Cập nhật trạng thái kết nối
+                Toast.makeText(this, "Connected successfully!", Toast.LENGTH_SHORT).show();
+                connectButton.setText("Connected");
+                connectButton.setEnabled(false);
+            });
+
+            // Bắt đầu nhận nước đi và tin nhắn chat
             while (scanner.hasNextLine()) {
                 String data = scanner.nextLine();
                 if (data.startsWith("CHAT:")) {
-                    // Handle chat message
-                    String message = data.substring(5); // Remove "CHAT:" prefix
+                    String message = data.substring(5);
                     appendMessage("Opponent: " + message);
+                } else if (data.equals("OPPONENT_DISCONNECTED")) {
+                    runOnUiThread(() -> {
+                        appendMessage("System: Opponent disconnected");
+                        connectButton.setText("Connect");
+                        connectButton.setEnabled(true);
+                    });
+                    break;
                 } else {
-                    // Handle chess move
+                    // Xử lý nước đi cờ
                     String[] move = data.split(",");
                     int fromCol = Integer.parseInt(move[0]);
                     int fromRow = Integer.parseInt(move[1]);
@@ -121,7 +144,59 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
 
                     runOnUiThread(() -> {
                         movePiece(new Square(fromCol, fromRow), new Square(toCol, toRow));
+                        // Đổi lượt sau khi đối thủ đi
+                        chessGame.switchTurn();
                     });
+                }
+            }
+        } catch (ConnectException e) {
+            runOnUiThread(() -> {
+                Toast.makeText(this, "Connection failed", Toast.LENGTH_SHORT).show();
+                connectButton.setText("Connect");
+                connectButton.setEnabled(true);
+                appendMessage("System: Connection failed");
+            });
+        } catch (IOException e) {
+            e.printStackTrace();
+            runOnUiThread(() -> {
+                connectButton.setText("Connect");
+                connectButton.setEnabled(true);
+                appendMessage("System: Connection error");
+            });
+        }
+    }    private void receiveData(Socket socket) {
+        try {
+            Scanner scanner = new Scanner(socket.getInputStream());
+            printWriter = new PrintWriter(socket.getOutputStream(), true);
+
+            while (scanner.hasNextLine()) {
+                String data = scanner.nextLine();
+
+                if (data.startsWith("WELCOME")) {
+                    // Thông báo chào mừng
+                    runOnUiThread(() -> appendMessage("System: " + data));
+                } else if (data.startsWith("CHAT:")) {
+                    // Tin nhắn chat
+                    String message = data.substring(5);
+                    runOnUiThread(() -> appendMessage("Opponent: " + message));
+                } else {
+                    // Nước đi cờ
+                    try {
+                        String[] move = data.split(",");
+                        int fromCol = Integer.parseInt(move[0]);
+                        int fromRow = Integer.parseInt(move[1]);
+                        int toCol = Integer.parseInt(move[2]);
+                        int toRow = Integer.parseInt(move[3]);
+
+                        // Cập nhật bàn cờ
+                        runOnUiThread(() -> {
+                            sentMoves.add(data);
+                            movePiece(new Square(fromCol, fromRow), new Square(toCol, toRow));
+                        });
+                    } catch (NumberFormatException e) {
+                        e.printStackTrace();
+                        runOnUiThread(() -> appendMessage("System: Invalid move data received"));
+                    }
                 }
             }
         } catch (IOException e) {
@@ -129,16 +204,13 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
             runOnUiThread(() -> {
                 appendMessage("System: Connection lost");
                 connectButton.setEnabled(true);
+                isPlayingBlack = false; // Reset trạng thái
+                chessView.setBlackSide(false);
+                chessView.invalidate();
             });
         }
     }
-    private void toggleChat() {
-        if (chatLayout.getVisibility() == View.VISIBLE) {
-            chatLayout.setVisibility(View.GONE);
-        } else {
-            chatLayout.setVisibility(View.VISIBLE);
-        }
-    }
+
 
     private void sendMessage() {
         String message = messageInput.getText().toString().trim();
@@ -425,17 +497,42 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
         chessGame.setPieceAt(square, piece);
     }
 
+    private Set<String> sentMoves = new HashSet<>();
+
     @Override
     public void movePiece(Square from, Square to) {
+        ChessPiece piece = pieceAt(from);
+        if (piece == null) {
+            return;
+        }
+
+        // Kiểm tra lượt đi dựa trên màu quân cờ và góc nhìn
+        boolean isWhiteTurn = chessGame.isWhiteTurn();
+        if ((isPlayingBlack && piece.getPlayer() == Player.WHITE) ||
+                (!isPlayingBlack && piece.getPlayer() == Player.BLACK)) {
+            // Không phải lượt của người chơi này
+            return;
+        }
+
+        // Kiểm tra nước đi hợp lệ
+        Set<Square> validMoves = getValidMoves(from);
+        if (!validMoves.contains(to)) {
+            return;
+        }
+
+        // Thực hiện di chuyển
         chessGame.movePiece(from, to);
         chessView.invalidate();
 
+        // Gửi nước đi tới đối thủ
         if (printWriter != null) {
-            String moveStr = from.getCol() + "," + from.getRow() + "," +
-                    to.getCol() + "," + to.getRow();
-            Executors.newSingleThreadExecutor().execute(() -> printWriter.println(moveStr));
+            String moveStr = from.getCol() + "," + from.getRow() + "," + to.getCol() + "," + to.getRow();
+            Executors.newSingleThreadExecutor().execute(() -> {
+                printWriter.println(moveStr);
+            });
         }
     }
+
 
 
     private void closeServerSocket() {

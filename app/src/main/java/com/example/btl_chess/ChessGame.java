@@ -10,6 +10,8 @@ public class ChessGame {
     private static Player currentPlayer = Player.WHITE;
     private static Set<Square> possibleMoves = new HashSet<>();
 
+
+
     public ChessGame() {
         piecesBox = new HashSet<>();
         reset();
@@ -366,5 +368,16 @@ public class ChessGame {
 
     public static void clearPossibleMoves() {
         possibleMoves.clear();
+    }
+    public boolean isWhiteTurn() {
+        return currentPlayer == Player.WHITE;
+    }
+
+    public void switchTurn() {
+        currentPlayer = (currentPlayer == Player.WHITE) ? Player.BLACK : Player.WHITE;
+    }
+
+    public void setCurrentPlayer(Player player) {
+        currentPlayer = player;
     }
 }
