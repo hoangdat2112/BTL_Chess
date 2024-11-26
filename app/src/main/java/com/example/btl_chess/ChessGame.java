@@ -380,4 +380,8 @@ public class ChessGame {
     public void setCurrentPlayer(Player player) {
         currentPlayer = player;
     }
+
+    public static Player getCurrentPlayer() {
+        return currentPlayer;
+    }
 }

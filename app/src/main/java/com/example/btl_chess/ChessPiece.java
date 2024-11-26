@@ -14,6 +14,36 @@ public class ChessPiece {
         this.chessman = chessman;
         this.resID = resID;
     }
+    public ChessPiece swapColor() {
+        // Xác định player mới
+        Player newPlayer = (this.player == Player.WHITE) ? Player.BLACK : Player.WHITE;
+
+        // Xác định resID mới
+        int newResID = getResourceIdForPiece(this.chessman, newPlayer);
+
+        // Trả về quân cờ mới với màu đảo ngược
+        return new ChessPiece(this.col, this.row, newPlayer, this.chessman, newResID);
+    }
+
+    // Phương thức để lấy resource ID phù hợp
+    private int getResourceIdForPiece(Chessman chessman, Player player) {
+        switch (chessman) {
+            case PAWN:
+                return (player == Player.WHITE) ? R.drawable.pawn_white : R.drawable.pawn_black;
+            case ROOK:
+                return (player == Player.WHITE) ? R.drawable.rook_white : R.drawable.rook_black;
+            case KNIGHT:
+                return (player == Player.WHITE) ? R.drawable.knight_white : R.drawable.knight_black;
+            case BISHOP:
+                return (player == Player.WHITE) ? R.drawable.bishop_white : R.drawable.bishop_black;
+            case QUEEN:
+                return (player == Player.WHITE) ? R.drawable.queen_white : R.drawable.queen_black;
+            case KING:
+                return (player == Player.WHITE) ? R.drawable.king_white : R.drawable.king_black;
+            default:
+                throw new IllegalArgumentException("Invalid chessman or player");
+        }
+    }
 
     public int getCol() {
         return col;

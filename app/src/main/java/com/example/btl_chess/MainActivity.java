@@ -38,8 +38,10 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
     private EditText messageInput;
     private StringBuilder chatHistory;
     private Button chatButton;
-    private boolean isPlayingBlack = false;
-    private Socket clientSocket = null;
+    // Thêm các trường để quản lý màu người chơi
+    private Player currentPlayerColor = Player.WHITE;
+    private boolean isFirstPlayerConnected = false;
+    private boolean isSecondPlayerConnected = false;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -48,7 +50,7 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
         // Initialize game components
         chessGame = new ChessGame();
         chessView = findViewById(R.id.chess_view);
-        chessView.setShowHints(false);
+        chessView.setShowHints(true);
         chessView.setChessDelegate(this);
         // Initialize chat components
         chatLayout = findViewById(R.id.chat_layout);
@@ -70,13 +72,8 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
             closeServerSocket();
         });
 
-
         connectButton.setOnClickListener(v -> {
             Log.d(TAG, "Socket client connecting...");
-            // Disable button while connecting
-            connectButton.setEnabled(false);
-            connectButton.setText("Connecting...");
-
             Executors.newSingleThreadExecutor().execute(() -> connectToServer());
         });
 
@@ -88,83 +85,44 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
             return true;
         });
     }
+
     private void connectToServer() {
         try {
-            clientSocket = new Socket(SOCKET_HOST, SOCKET_PORT);
-            Scanner scanner = new Scanner(clientSocket.getInputStream());
-            printWriter = new PrintWriter(clientSocket.getOutputStream(), true);
+            Socket socket = new Socket(SOCKET_HOST, SOCKET_PORT);
+            PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
 
-            // Đợi tin nhắn chào từ server
-            String welcomeMsg = scanner.nextLine();
-            Log.d(TAG, "Server welcome message: " + welcomeMsg);
-
-            // Cập nhật UI dựa trên màu được gán
-            runOnUiThread(() -> {
-                if (welcomeMsg.contains("BLACK")) {
-                    isPlayingBlack = true;
-                    chessView.setBlackSide(true);
-                    chessGame.setCurrentPlayer(Player.WHITE); // Bắt đầu với lượt trắng
-
-                } else {
-                    isPlayingBlack = false;
-                    chessView.setBlackSide(false);
-                    chessGame.setCurrentPlayer(Player.WHITE); // Bắt đầu với lượt trắng
-
-                }
-
-                // Vẽ lại bàn cờ với hướng mới
-                chessView.invalidate();
-
-                // Cập nhật trạng thái kết nối
-                Toast.makeText(this, "Connected successfully!", Toast.LENGTH_SHORT).show();
-                connectButton.setText("Connected");
-                connectButton.setEnabled(false);
-            });
-
-            // Bắt đầu nhận nước đi và tin nhắn chat
-            while (scanner.hasNextLine()) {
-                String data = scanner.nextLine();
-                if (data.startsWith("CHAT:")) {
-                    String message = data.substring(5);
-                    appendMessage("Opponent: " + message);
-                } else if (data.equals("OPPONENT_DISCONNECTED")) {
-                    runOnUiThread(() -> {
-                        appendMessage("System: Opponent disconnected");
-                        connectButton.setText("Connect");
-                        connectButton.setEnabled(true);
-                    });
-                    break;
-                } else {
-                    // Xử lý nước đi cờ
-                    String[] move = data.split(",");
-                    int fromCol = Integer.parseInt(move[0]);
-                    int fromRow = Integer.parseInt(move[1]);
-                    int toCol = Integer.parseInt(move[2]);
-                    int toRow = Integer.parseInt(move[3]);
-
-                    runOnUiThread(() -> {
-                        movePiece(new Square(fromCol, fromRow), new Square(toCol, toRow));
-                        // Đổi lượt sau khi đối thủ đi
-                        chessGame.switchTurn();
-                    });
-                }
+            // Gửi yêu cầu về màu của người chơi
+            if (!isFirstPlayerConnected) {
+                out.println("FIRST_PLAYER_WHITE");
+                currentPlayerColor = Player.WHITE;
+                isFirstPlayerConnected = true;
+            } else {
+                out.println("SECOND_PLAYER_BLACK");
+                currentPlayerColor = Player.BLACK;
+                isSecondPlayerConnected = true;
             }
+
+            // Nhận và xử lý dữ liệu từ server
+            receiveData(socket);
+
+            runOnUiThread(() -> {
+                Toast.makeText(this, "Connected as " + currentPlayerColor + " player!", Toast.LENGTH_SHORT).show();
+                connectButton.setEnabled(false);
+
+                // Thêm thông báo về màu quân
+                appendMessage("System: You are playing as " + currentPlayerColor + " pieces");
+            });
         } catch (ConnectException e) {
             runOnUiThread(() -> {
                 Toast.makeText(this, "Connection failed", Toast.LENGTH_SHORT).show();
-                connectButton.setText("Connect");
                 connectButton.setEnabled(true);
-                appendMessage("System: Connection failed");
             });
         } catch (IOException e) {
             e.printStackTrace();
-            runOnUiThread(() -> {
-                connectButton.setText("Connect");
-                connectButton.setEnabled(true);
-                appendMessage("System: Connection error");
-            });
+            runOnUiThread(() -> connectButton.setEnabled(true));
         }
-    }    private void receiveData(Socket socket) {
+    }
+    private void receiveData(Socket socket) {
         try {
             Scanner scanner = new Scanner(socket.getInputStream());
             printWriter = new PrintWriter(socket.getOutputStream(), true);
@@ -172,30 +130,48 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
             while (scanner.hasNextLine()) {
                 String data = scanner.nextLine();
 
-                if (data.startsWith("WELCOME")) {
-                    // Thông báo chào mừng
-                    runOnUiThread(() -> appendMessage("System: " + data));
-                } else if (data.startsWith("CHAT:")) {
-                    // Tin nhắn chat
+                // Handle different types of messages
+                if (data.startsWith("CHAT:")) {
+                    // Chat message
                     String message = data.substring(5);
-                    runOnUiThread(() -> appendMessage("Opponent: " + message));
+                    appendMessage("Opponent: " + message);
+                } else if (data.equals("WHITE")) {
+                    // White player color assignment
+                    runOnUiThread(() -> {
+                        swapPlayerColors();
+                    });
+                } else if (data.equals("BLACK")) {
+                    // Black player color assignment
+                    // No color change needed
+                } else if (data.equals("OPPONENT_CONNECTED")) {
+                    // Opponent connection notification
+                    runOnUiThread(() -> {
+                        appendMessage("System: Opponent connected");
+                        isSecondPlayerConnected = true;
+                    });
+                } else if (data.equals("OPPONENT_DISCONNECTED")) {
+                    // Opponent disconnection notification
+                    runOnUiThread(() -> {
+                        appendMessage("System: Opponent disconnected");
+                        isSecondPlayerConnected = false;
+                        connectButton.setEnabled(true);
+                    });
                 } else {
-                    // Nước đi cờ
+                    // Try to parse as a move
                     try {
                         String[] move = data.split(",");
-                        int fromCol = Integer.parseInt(move[0]);
-                        int fromRow = Integer.parseInt(move[1]);
-                        int toCol = Integer.parseInt(move[2]);
-                        int toRow = Integer.parseInt(move[3]);
+                        if (move.length == 4) {
+                            int fromCol = Integer.parseInt(move[0]);
+                            int fromRow = Integer.parseInt(move[1]);
+                            int toCol = Integer.parseInt(move[2]);
+                            int toRow = Integer.parseInt(move[3]);
 
-                        // Cập nhật bàn cờ
-                        runOnUiThread(() -> {
-                            sentMoves.add(data);
-                            movePiece(new Square(fromCol, fromRow), new Square(toCol, toRow));
-                        });
+                            runOnUiThread(() -> {
+                                movePiece(new Square(fromCol, fromRow), new Square(toCol, toRow));
+                            });
+                        }
                     } catch (NumberFormatException e) {
-                        e.printStackTrace();
-                        runOnUiThread(() -> appendMessage("System: Invalid move data received"));
+                        Log.e(TAG, "Invalid move format: " + data);
                     }
                 }
             }
@@ -204,13 +180,13 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
             runOnUiThread(() -> {
                 appendMessage("System: Connection lost");
                 connectButton.setEnabled(true);
-                isPlayingBlack = false; // Reset trạng thái
-                chessView.setBlackSide(false);
-                chessView.invalidate();
             });
         }
     }
-
+    // Thêm phương thức để kiểm tra màu người chơi hiện tại
+    private boolean isCurrentPlayersTurn() {
+        return currentPlayerColor == chessGame.getCurrentPlayer();
+    }
 
     private void sendMessage() {
         String message = messageInput.getText().toString().trim();
@@ -496,43 +472,32 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
     private void setPieceAt(Square square, ChessPiece piece) {
         chessGame.setPieceAt(square, piece);
     }
-
-    private Set<String> sentMoves = new HashSet<>();
-
+    private void swapPlayerColors() {
+        for (int row = 0; row < 8; row++) {
+            for (int col = 0; col < 8; col++) {
+                Square square = new Square(col, row);
+                ChessPiece piece = chessGame.pieceAt(square);
+                if (piece != null) {
+                    // Tạo quân cờ mới với màu đảo ngược
+                    ChessPiece newPiece = piece.swapColor();
+                    chessGame.setPieceAt(square, newPiece);
+                }
+            }
+        }
+        chessView.invalidate(); // Vẽ lại bàn cờ
+    }
+    private boolean isMoving = false;
     @Override
     public void movePiece(Square from, Square to) {
-        ChessPiece piece = pieceAt(from);
-        if (piece == null) {
-            return;
-        }
-
-        // Kiểm tra lượt đi dựa trên màu quân cờ và góc nhìn
-        boolean isWhiteTurn = chessGame.isWhiteTurn();
-        if ((isPlayingBlack && piece.getPlayer() == Player.WHITE) ||
-                (!isPlayingBlack && piece.getPlayer() == Player.BLACK)) {
-            // Không phải lượt của người chơi này
-            return;
-        }
-
-        // Kiểm tra nước đi hợp lệ
-        Set<Square> validMoves = getValidMoves(from);
-        if (!validMoves.contains(to)) {
-            return;
-        }
-
-        // Thực hiện di chuyển
         chessGame.movePiece(from, to);
         chessView.invalidate();
 
-        // Gửi nước đi tới đối thủ
         if (printWriter != null) {
-            String moveStr = from.getCol() + "," + from.getRow() + "," + to.getCol() + "," + to.getRow();
-            Executors.newSingleThreadExecutor().execute(() -> {
-                printWriter.println(moveStr);
-            });
+            String moveStr = from.getCol() + "," + from.getRow() + "," +
+                    to.getCol() + "," + to.getRow();
+            Executors.newSingleThreadExecutor().execute(() -> printWriter.println(moveStr));
         }
     }
-
 
 
     private void closeServerSocket() {
