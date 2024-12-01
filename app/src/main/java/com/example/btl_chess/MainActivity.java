@@ -1,6 +1,8 @@
 package com.example.btl_chess;
 
 import static com.example.btl_chess.Chessman.*;
+
+import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
@@ -39,13 +41,21 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
     private StringBuilder chatHistory;
     private Button chatButton;
     // Thêm các trường để quản lý màu người chơi
-    private Player currentPlayerColor = Player.WHITE;
+    private Player currentPlayerColor = Player.BLACK;
     private boolean isFirstPlayerConnected = false;
     private boolean isSecondPlayerConnected = false;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        // Nhận socket từ Intent
+        Intent intent = getIntent();
+        Socket socket = (Socket) intent.getSerializableExtra("SOCKET");
+
+        // Kiểm tra socket
+        if (socket != null) {
+            connectToServer(socket);
+        }
 
         // Initialize game components
         chessGame = new ChessGame();
@@ -63,7 +73,7 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
 
     private void initializeButtons() {
         resetButton = findViewById(R.id.reset_button);
-        connectButton = findViewById(R.id.connect_button);
+//        connectButton = findViewById(R.id.connect_button);
         Button sendButton = findViewById(R.id.send_button);
 
         resetButton.setOnClickListener(v -> {
@@ -72,10 +82,10 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
             closeServerSocket();
         });
 
-        connectButton.setOnClickListener(v -> {
-            Log.d(TAG, "Socket client connecting...");
-            Executors.newSingleThreadExecutor().execute(() -> connectToServer());
-        });
+//        connectButton.setOnClickListener(v -> {
+//            Log.d(TAG, "Socket client connecting...");
+//            Executors.newSingleThreadExecutor().execute(() -> connectToServer());
+//        });
 
         sendButton.setOnClickListener(v -> sendMessage());
 
@@ -86,20 +96,25 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
         });
     }
 
-    private void connectToServer() {
+    private void connectToServer(Socket socket) {
         try {
-            Socket socket = new Socket(SOCKET_HOST, SOCKET_PORT);
+
             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+
+            Log.d(TAG, "Attempting connection. isFirstPlayerConnected: " + isFirstPlayerConnected);
+
 
             // Gửi yêu cầu về màu của người chơi
             if (!isFirstPlayerConnected) {
                 out.println("FIRST_PLAYER_WHITE");
                 currentPlayerColor = Player.WHITE;
                 isFirstPlayerConnected = true;
+                Log.d(TAG, "Sent FIRST_PLAYER_WHITE");
             } else {
                 out.println("SECOND_PLAYER_BLACK");
                 currentPlayerColor = Player.BLACK;
                 isSecondPlayerConnected = true;
+                Log.d(TAG, "Sent SECOND_PLAYER_BLACK");
             }
 
             // Nhận và xử lý dữ liệu từ server
@@ -126,28 +141,21 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
         try {
             Scanner scanner = new Scanner(socket.getInputStream());
             printWriter = new PrintWriter(socket.getOutputStream(), true);
-
             while (scanner.hasNextLine()) {
                 String data = scanner.nextLine();
-
+                // Log toàn bộ dữ liệu nhận được để debug
+                Log.d(TAG, "Received data: " + data);
                 // Handle different types of messages
                 if (data.startsWith("CHAT:")) {
                     // Chat message
                     String message = data.substring(5);
                     appendMessage("Opponent: " + message);
-                } else if (data.equals("WHITE")) {
-                    // White player color assignment
-                    runOnUiThread(() -> {
-                        swapPlayerColors();
-                    });
-                } else if (data.equals("BLACK")) {
-                    // Black player color assignment
-                    // No color change needed
-                } else if (data.equals("OPPONENT_CONNECTED")) {
+                }  else if (data.equals("OPPONENT_CONNECTED")) {
                     // Opponent connection notification
                     runOnUiThread(() -> {
                         appendMessage("System: Opponent connected");
                         isSecondPlayerConnected = true;
+                        swapPlayerColors(); // Thêm dòng này để swap colors
                     });
                 } else if (data.equals("OPPONENT_DISCONNECTED")) {
                     // Opponent disconnection notification
@@ -214,6 +222,19 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
                 if (scrollAmount > 0)
                     chatMessages.scrollTo(0, scrollAmount);
             });
+        });
+    }
+    private void updatePlayerColorUI() {
+        // Cập nhật giao diện khi thay đổi màu
+        runOnUiThread(() -> {
+            Toast.makeText(this, "You are playing as " + currentPlayerColor, Toast.LENGTH_SHORT).show();
+            appendMessage("System: You are playing as " + currentPlayerColor + " pieces");
+
+            // Vô hiệu hóa nút kết nối
+            connectButton.setEnabled(false);
+
+            // Cập nhật trạng thái view nếu cần
+            chessView.invalidate();
         });
     }
 
@@ -443,26 +464,7 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
         setPieceAt(to, piece);
     }
 
-    private void receiveMove(Socket socket) {
-        try {
-            Scanner scanner = new Scanner(socket.getInputStream());
-            printWriter = new PrintWriter(socket.getOutputStream(), true);
 
-            while (scanner.hasNextLine()) {
-                String[] move = scanner.nextLine().split(",");
-                int fromCol = Integer.parseInt(move[0]);
-                int fromRow = Integer.parseInt(move[1]);
-                int toCol = Integer.parseInt(move[2]);
-                int toRow = Integer.parseInt(move[3]);
-
-                runOnUiThread(() -> {
-                    movePiece(new Square(fromCol, fromRow), new Square(toCol, toRow));
-                });
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
 
     @Override
     public ChessPiece pieceAt(Square square) {
@@ -473,18 +475,23 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
         chessGame.setPieceAt(square, piece);
     }
     private void swapPlayerColors() {
-        for (int row = 0; row < 8; row++) {
-            for (int col = 0; col < 8; col++) {
-                Square square = new Square(col, row);
-                ChessPiece piece = chessGame.pieceAt(square);
-                if (piece != null) {
-                    // Tạo quân cờ mới với màu đảo ngược
-                    ChessPiece newPiece = piece.swapColor();
-                    chessGame.setPieceAt(square, newPiece);
-                }
+        // Swap the current player color when the second player connects
+        if (isFirstPlayerConnected && isSecondPlayerConnected) {
+            if (currentPlayerColor == Player.WHITE) {
+                currentPlayerColor = Player.BLACK;
+            } else {
+                currentPlayerColor = Player.WHITE;
             }
+
+            // Cập nhật UI để phản ánh màu mới
+            runOnUiThread(() -> {
+                Toast.makeText(this, "Player color changed to " + currentPlayerColor, Toast.LENGTH_SHORT).show();
+
+                // Nếu bạn có thêm logic để cập nhật giao diện theo màu người chơi
+                // Thực hiện ở đây
+                chessView.invalidate(); // Vẽ lại bàn cờ nếu cần
+            });
         }
-        chessView.invalidate(); // Vẽ lại bàn cờ
     }
     private boolean isMoving = false;
     @Override

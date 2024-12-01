@@ -30,6 +30,8 @@ public class ChessView extends View {
     private Set<Square> hintSquares = new HashSet<>();
     private final int hintColor = Color.parseColor("#80FF0000");
     private final int checkColor = Color.parseColor("#FFFF00");
+    private boolean isFlipped = false;
+
 
     private Set<Integer> imgResIDs = Set.of(
             R.drawable.bishop_black,
@@ -272,5 +274,13 @@ public class ChessView extends View {
 
     public void setChessDelegate(ChessDelegate chessDelegate) {
         this.chessDelegate = chessDelegate;
+    }
+    public void setFlipped(boolean flipped) {
+        this.isFlipped = flipped;
+        invalidate();
+    }
+
+    public boolean isFlipped() {
+        return isFlipped;
     }
 }
