@@ -2,6 +2,6 @@
     <string name="app_name">Chess</string>
     <string name="reset_button">Reset</string>
     <string name="listen_button">Listen</string>
-    <string name="connect_button">Connect</string>
+    <string name="connect_button">Start</string>
     <string name="theme_button">Toggle Theme</string>
 </resources>

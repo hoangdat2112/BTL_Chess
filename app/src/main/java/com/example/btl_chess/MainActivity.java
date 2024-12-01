@@ -1,8 +1,6 @@
 package com.example.btl_chess;
 
 import static com.example.btl_chess.Chessman.*;
-
-import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
@@ -26,7 +24,7 @@ import java.util.concurrent.Executors;
 public class MainActivity extends AppCompatActivity implements ChessDelegate {
     private static final String TAG = "MainActivity";
     private static final String SOCKET_HOST = "10.0.2.2";
-    private static final int SOCKET_PORT = 50001;
+    private static final int SOCKET_PORT = 50002;
 
     private ChessGame chessGame;
     private ChessView chessView;
@@ -48,13 +46,16 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        // Nhận socket từ Intent
-        Intent intent = getIntent();
-        Socket socket = (Socket) intent.getSerializableExtra("SOCKET");
 
-        // Kiểm tra socket
-        if (socket != null) {
-            connectToServer(socket);
+        // Lấy Room ID từ Intent
+        String roomId = getIntent().getStringExtra("ROOM_ID");
+
+        // Hiển thị Room ID
+        TextView roomIdDisplay = findViewById(R.id.room_id_display);
+        if (roomId != null) {
+            roomIdDisplay.setText("Room ID: " + roomId);
+        } else {
+            roomIdDisplay.setText("No Room ID");
         }
 
         // Initialize game components
@@ -73,7 +74,7 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
 
     private void initializeButtons() {
         resetButton = findViewById(R.id.reset_button);
-//        connectButton = findViewById(R.id.connect_button);
+        connectButton = findViewById(R.id.connect_button);
         Button sendButton = findViewById(R.id.send_button);
 
         resetButton.setOnClickListener(v -> {
@@ -82,10 +83,10 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
             closeServerSocket();
         });
 
-//        connectButton.setOnClickListener(v -> {
-//            Log.d(TAG, "Socket client connecting...");
-//            Executors.newSingleThreadExecutor().execute(() -> connectToServer());
-//        });
+        connectButton.setOnClickListener(v -> {
+            Log.d(TAG, "Socket client connecting...");
+            Executors.newSingleThreadExecutor().execute(() -> connectToServer());
+        });
 
         sendButton.setOnClickListener(v -> sendMessage());
 
@@ -96,9 +97,9 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
         });
     }
 
-    private void connectToServer(Socket socket) {
+    private void connectToServer() {
         try {
-
+            Socket socket = new Socket(SOCKET_HOST, SOCKET_PORT);
             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
 
             Log.d(TAG, "Attempting connection. isFirstPlayerConnected: " + isFirstPlayerConnected);
@@ -124,8 +125,6 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
                 Toast.makeText(this, "Connected as " + currentPlayerColor + " player!", Toast.LENGTH_SHORT).show();
                 connectButton.setEnabled(false);
 
-                // Thêm thông báo về màu quân
-                appendMessage("System: You are playing as " + currentPlayerColor + " pieces");
             });
         } catch (ConnectException e) {
             runOnUiThread(() -> {
@@ -150,7 +149,22 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
                     // Chat message
                     String message = data.substring(5);
                     appendMessage("Opponent: " + message);
-                }  else if (data.equals("OPPONENT_CONNECTED")) {
+                } else if (data.equals("WHITE")) {
+                    Log.d(TAG, "Setting color to WHITE");
+
+                    // White player color assignment
+                    runOnUiThread(() -> {
+                        currentPlayerColor = Player.WHITE;
+                        swapPlayerColors();
+                    });
+                }
+                else if (data.equals("BLACK")) {
+                    Log.d(TAG, "Setting color to BLACK");
+
+                    runOnUiThread(() -> {
+                        currentPlayerColor = Player.BLACK;
+                    });
+                } else if (data.equals("OPPONENT_CONNECTED")) {
                     // Opponent connection notification
                     runOnUiThread(() -> {
                         appendMessage("System: Opponent connected");
