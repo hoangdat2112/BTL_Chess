@@ -35,7 +35,11 @@ dependencies {
 
     implementation(libs.appcompat)
     implementation(libs.material)
+    // Thêm ExoPlayer dependencies
+    implementation("com.google.android.exoplayer:exoplayer-core:2.19.1")
+    implementation("com.google.android.exoplayer:exoplayer-ui:2.19.1")
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
+
 }

@@ -16,28 +16,30 @@
         android:padding="8dp">
 
         <Button
-            android:id="@+id/reset_button"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_margin="8dp"
-            android:text="@string/reset_button"/>
-
-        <Button
             android:id="@+id/connect_button"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_margin="8dp"
-            android:text="@string/connect_button"/>
+            android:layout_weight="1"
+            android:text="@string/connect_button"
+            android:layout_margin="8dp"/>
+
         <TextView
             android:id="@+id/room_id_display"
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="2"
             android:gravity="center"
-            android:textSize="16sp"
-            android:padding="8dp"
-            android:text="Room ID: "/>
+            android:text="Room ID: "
+            android:layout_margin="8dp"/>
 
-
+        <ImageButton
+            android:id="@+id/sound_button"
+            android:layout_width="wrap_content"
+            android:layout_height="50dp"
+            android:src="@drawable/ic_music_note"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Music Control"
+            android:layout_margin="8dp"/>
     </LinearLayout>
     <!-- Chess View Container -->
     <LinearLayout

@@ -1,16 +1,23 @@
 package com.example.btl_chess;
 
 import static com.example.btl_chess.Chessman.*;
+
+import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
+
+import com.google.android.exoplayer2.ExoPlayer;
+import com.google.android.exoplayer2.MediaItem;
+
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.ConnectException;
@@ -42,6 +49,9 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
     private Player currentPlayerColor = Player.BLACK;
     private boolean isFirstPlayerConnected = false;
     private boolean isSecondPlayerConnected = false;
+    private ExoPlayer mediaPlayer;
+    private ImageButton soundButton;
+    private boolean isMusicPlaying = false;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -57,6 +67,14 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
         } else {
             roomIdDisplay.setText("No Room ID");
         }
+        // Khởi tạo ExoPlayer
+        mediaPlayer = new ExoPlayer.Builder(this).build();
+
+        // Ánh xạ nút âm thanh
+        soundButton = findViewById(R.id.sound_button);
+
+        // Sự kiện nhấn nút âm thanh
+        soundButton.setOnClickListener(v -> toggleMusic());
 
         // Initialize game components
         chessGame = new ChessGame();
@@ -73,15 +91,15 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
     }
 
     private void initializeButtons() {
-        resetButton = findViewById(R.id.reset_button);
+//        resetButton = findViewById(R.id.reset_button);
         connectButton = findViewById(R.id.connect_button);
         Button sendButton = findViewById(R.id.send_button);
 
-        resetButton.setOnClickListener(v -> {
-            chessGame.reset();
-            chessView.invalidate();
-            closeServerSocket();
-        });
+//        resetButton.setOnClickListener(v -> {
+//            chessGame.reset();
+//            chessView.invalidate();
+//            closeServerSocket();
+//        });
 
         connectButton.setOnClickListener(v -> {
             Log.d(TAG, "Socket client connecting...");
@@ -95,6 +113,36 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
             sendMessage();
             return true;
         });
+    }
+    private void toggleMusic() {
+        if (isMusicPlaying) {
+            pauseMusic();
+        } else {
+            playMusic();
+        }
+    }
+
+    private void playMusic() {
+        // Thay đường dẫn bằng file nhạc của bạn trong thư mục raw
+        MediaItem mediaItem = MediaItem.fromUri("android.resource://" + getPackageName() + "/raw/adventure");
+
+        mediaPlayer.setMediaItem(mediaItem);
+        mediaPlayer.prepare();
+        mediaPlayer.play();
+
+        isMusicPlaying = true;
+        updateSoundButtonState();
+    }
+
+    private void pauseMusic() {
+        mediaPlayer.pause();
+        isMusicPlaying = false;
+        updateSoundButtonState();
+    }
+
+    private void updateSoundButtonState() {
+        // Thay đổi màu hoặc icon dựa trên trạng thái phát nhạc
+        soundButton.setColorFilter(isMusicPlaying ? Color.GREEN : Color.GRAY);
     }
 
     private void connectToServer() {
