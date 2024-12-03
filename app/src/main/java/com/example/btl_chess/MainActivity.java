@@ -13,6 +13,8 @@ import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.exoplayer2.ExoPlayer;
@@ -86,6 +88,12 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
         chatMessages = findViewById(R.id.chat_messages);
         messageInput = findViewById(R.id.message_input);
         chatHistory = new StringBuilder();
+        ImageButton settingsButton = findViewById(R.id.settings_button);
+        settingsButton.setOnClickListener(v -> {
+            ChessView chessView = findViewById(R.id.chess_view);
+            showColorSchemeDialog(chessView);
+        });
+
 
         initializeButtons();
     }
@@ -113,6 +121,18 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
             sendMessage();
             return true;
         });
+    }
+    private void showColorSchemeDialog(ChessView chessView) {
+        String[] colorNames = chessView.getColorSchemeNames();
+
+        new AlertDialog.Builder(this)
+                .setTitle("Choose Chessboard Color")
+                .setSingleChoiceItems(colorNames, chessView.getCurrentColorScheme(), (dialog, which) -> {
+                    chessView.changeColorScheme(which);
+                    dialog.dismiss();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
     private void toggleMusic() {
         if (isMusicPlaying) {
@@ -565,6 +585,70 @@ public class MainActivity extends AppCompatActivity implements ChessDelegate {
             String moveStr = from.getCol() + "," + from.getRow() + "," +
                     to.getCol() + "," + to.getRow();
             Executors.newSingleThreadExecutor().execute(() -> printWriter.println(moveStr));
+        }
+    }
+    private void handleWaitingPlayersRequest(String roomId) {
+        // Hiển thị danh sách người chơi đang chờ
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Người chơi đang chờ");
+
+        // Tạo danh sách người chơi (giả định)
+        String[] waitingPlayers = {"Người chơi 1", "Người chơi 2"};
+
+        builder.setItems(waitingPlayers, (dialog, which) -> {
+            String selectedPlayer = waitingPlayers[which];
+
+            // Hiển thị dialog xác nhận
+            new AlertDialog.Builder(this)
+                    .setTitle("Phê duyệt người chơi")
+                    .setMessage("Bạn có muốn cho " + selectedPlayer + " vào phòng không?")
+                    .setPositiveButton("Đồng ý", (d, w) -> {
+                        approvePlayer(roomId, selectedPlayer);
+                    })
+                    .setNegativeButton("Từ chối", (d, w) -> {
+                        rejectPlayer(roomId, selectedPlayer);
+                    })
+                    .show();
+        });
+
+        builder.show();
+    }
+
+    private void approvePlayer(String roomId, String playerName) {
+        // Gửi thông điệp phê duyệt đến server
+        if (printWriter != null) {
+            printWriter.println("APPROVE_PLAYER:" + roomId + ":" + playerName);
+            Toast.makeText(this, "Đã phê duyệt " + playerName, Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void rejectPlayer(String roomId, String playerName) {
+        // Gửi thông điệp từ chối đến server
+        if (printWriter != null) {
+            printWriter.println("REJECT_PLAYER:" + roomId + ":" + playerName);
+            Toast.makeText(this, "Đã từ chối " + playerName, Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    // Thêm vào phương thức xử lý tin nhắn từ server
+    private void processServerMessage(String message) {
+        // Các xử lý tin nhắn server khác...
+
+        if (message.startsWith("PLAYER_WAITING:")) {
+            // Thông báo có người chơi đang chờ
+            String[] parts = message.split(":");
+            String playerName = parts[1];
+            String roomId = parts[2];
+
+            // Hiển thị thông báo cho host
+            new AlertDialog.Builder(this)
+                    .setTitle("Yêu cầu vào phòng")
+                    .setMessage(playerName + " muốn vào phòng")
+                    .setPositiveButton("Quản lý", (dialog, which) -> {
+                        handleWaitingPlayersRequest(roomId);
+                    })
+                    .setNegativeButton("Bỏ qua", null)
+                    .show();
         }
     }
 

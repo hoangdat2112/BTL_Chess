@@ -31,6 +31,59 @@ public class ChessView extends View {
     private final int hintColor = Color.parseColor("#80FF0000");
     private final int checkColor = Color.parseColor("#FFFF00");
     private boolean isFlipped = false;
+    // Loại bỏ khai báo cũ và thay thế bằng:
+    private static final int[][] COLOR_SCHEMES = {
+            // Default (Gray)
+            {Color.parseColor("#EEEEEE"), Color.parseColor("#BBBBBB")},
+            // Brown
+            {Color.parseColor("#F0D9B5"), Color.parseColor("#B58863")},
+            // Green
+            {Color.parseColor("#E6EED4"), Color.parseColor("#779556")},
+            // Blue
+            {Color.parseColor("#DEE3E6"), Color.parseColor("#8CA2AD")},
+            // Purple
+            {Color.parseColor("#E0E0F0"), Color.parseColor("#6A5ACD")},
+            // Red
+            {Color.parseColor("#F5D6BA"), Color.parseColor("#A52A2A")}
+    };
+
+    private int currentColorScheme = 0;
+
+    // Sửa đổi để sử dụng phương thức getter
+    private int getLightColor() {
+        return COLOR_SCHEMES[currentColorScheme][0];
+    }
+
+    private int getDarkColor() {
+        return COLOR_SCHEMES[currentColorScheme][1];
+    }
+
+    // Sửa đổi phương thức vẽ ô để sử dụng getter
+    private void drawSquareAt(Canvas canvas, int col, int row, boolean isDark) {
+        paint.setColor(isDark ? getDarkColor() : getLightColor());
+        canvas.drawRect(originX + col * cellSide, originY + row * cellSide,
+                originX + (col + 1) * cellSide, originY + (row + 1) * cellSide, paint);
+    }
+
+    // Phương thức thay đổi màu
+    public void changeColorScheme(int schemeIndex) {
+        if (schemeIndex >= 0 && schemeIndex < COLOR_SCHEMES.length) {
+            currentColorScheme = schemeIndex;
+            invalidate(); // Vẽ lại bàn cờ
+        }
+    }
+
+    // Phương thức lấy tên màu
+    public String[] getColorSchemeNames() {
+        return new String[]{
+                "Classic Gray",
+                "Wooden Brown",
+                "Forest Green",
+                "Ocean Blue",
+                "Lavender Purple",
+                "Brick Red"
+        };
+    }
 
 
     private Set<Integer> imgResIDs = Set.of(
@@ -266,11 +319,11 @@ public class ChessView extends View {
         }
     }
 
-    private void drawSquareAt(Canvas canvas, int col, int row, boolean isDark) {
-        paint.setColor(isDark ? darkColor : lightColor);
-        canvas.drawRect(originX + col * cellSide, originY + row * cellSide,
-                originX + (col + 1) * cellSide, originY + (row + 1) * cellSide, paint);
-    }
+//    private void drawSquareAt(Canvas canvas, int col, int row, boolean isDark) {
+//        paint.setColor(isDark ? darkColor : lightColor);
+//        canvas.drawRect(originX + col * cellSide, originY + row * cellSide,
+//                originX + (col + 1) * cellSide, originY + (row + 1) * cellSide, paint);
+//    }
 
     public void setChessDelegate(ChessDelegate chessDelegate) {
         this.chessDelegate = chessDelegate;
@@ -283,4 +336,8 @@ public class ChessView extends View {
     public boolean isFlipped() {
         return isFlipped;
     }
+    public int getCurrentColorScheme() {
+        return currentColorScheme;
+    }
+
 }

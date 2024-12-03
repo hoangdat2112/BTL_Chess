@@ -384,4 +384,5 @@ public class ChessGame {
     public static Player getCurrentPlayer() {
         return currentPlayer;
     }
+
 }

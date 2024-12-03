@@ -17,19 +17,31 @@
 
         <Button
             android:id="@+id/connect_button"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:text="@string/connect_button"
-            android:layout_margin="8dp"/>
+            android:textSize="12sp"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="4dp"
+            android:layout_marginEnd="8dp"/>
 
         <TextView
             android:id="@+id/room_id_display"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight="2"
+            android:layout_weight="1"
             android:gravity="center"
             android:text="Room ID: "
+            android:layout_margin="8dp"/>
+
+        <!-- Thêm nút Settings -->
+        <ImageButton
+            android:id="@+id/settings_button"
+            android:layout_width="wrap_content"
+            android:layout_height="50dp"
+            android:src="@drawable/ic_settings"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Game Settings"
             android:layout_margin="8dp"/>
 
         <ImageButton

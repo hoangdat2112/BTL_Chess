@@ -2,13 +2,14 @@ package com.example.btl_chess;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.util.Log;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.ListView;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -19,19 +20,21 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Scanner;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 public class RoomActivity extends AppCompatActivity {
     private EditText roomNameInput;
+    private EditText roomSearchInput;
     private Button createRoomButton;
     private RecyclerView roomListRecyclerView;
     private RoomAdapter roomAdapter;
     private List<Room> roomList = new ArrayList<>();
+    private List<Room> filteredRoomList = new ArrayList<>();
     private Socket socket;
     private PrintWriter printWriter;
+    private BufferedReader bufferedReader;
     private static final String SOCKET_HOST = "10.0.2.2";
     private static final int SOCKET_PORT = 50001;
 
@@ -42,11 +45,12 @@ public class RoomActivity extends AppCompatActivity {
 
         // Ánh xạ view
         roomNameInput = findViewById(R.id.room_name_input);
+        roomSearchInput = findViewById(R.id.room_search_input);
         createRoomButton = findViewById(R.id.create_room_button);
         roomListRecyclerView = findViewById(R.id.room_list_recycler_view);
 
         // Thiết lập RecyclerView
-        roomAdapter = new RoomAdapter(roomList, this::onRoomSelected);
+        roomAdapter = new RoomAdapter(filteredRoomList, this::onRoomSelected);
         roomListRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         roomListRecyclerView.setAdapter(roomAdapter);
 
@@ -62,6 +66,22 @@ public class RoomActivity extends AppCompatActivity {
                 Toast.makeText(this, "Vui lòng nhập tên phòng", Toast.LENGTH_SHORT).show();
             }
         });
+
+        // Sự kiện tìm kiếm phòng
+        roomSearchInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                filterRooms(s.toString());
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {}
+        });
+        roomAdapter = new RoomAdapter(filteredRoomList, this::onRoomSelected);
+
     }
 
     private void connectToServer() {
@@ -69,6 +89,7 @@ public class RoomActivity extends AppCompatActivity {
             try {
                 socket = new Socket(SOCKET_HOST, SOCKET_PORT);
                 printWriter = new PrintWriter(socket.getOutputStream(), true);
+                bufferedReader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
                 // Lắng nghe phản hồi từ server
                 listenToServerResponses();
@@ -77,33 +98,77 @@ public class RoomActivity extends AppCompatActivity {
                 printWriter.println("LIST_ROOMS");
             } catch (IOException e) {
                 runOnUiThread(() -> {
-                    Toast.makeText(this, "Lỗi kết nối máy chủ", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Lỗi kết nối máy chủ: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    Log.e("RoomActivity", "Server connection error", e);
                 });
             }
         });
     }
 
-    private void listenToServerResponses() {
-        Executors.newSingleThreadExecutor().execute(() -> {
-            try {
-                BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    final String response = line;
-                    runOnUiThread(() -> {
-                        // Xử lý phản hồi từ server
-                        if (response.startsWith("ROOM_LIST:")) {
-                            updateRoomList(response);
-                        } else if (response.startsWith("ROOM_CREATED:")) {
-                            String roomId = response.split(":")[1];
-                            addNewRoom(roomId);
-                        }
-                    });
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
+//    private void listenToServerResponses() {
+//        Executors.newSingleThreadExecutor().execute(() -> {
+//            try {
+//                String line;
+//                while ((line = bufferedReader.readLine()) != null) {
+//                    final String response = line;
+//                    runOnUiThread(() -> {
+//                        // Xử lý phản hồi từ server
+//                        if (response.startsWith("ROOM_LIST:")) {
+//                            updateRoomList(response);
+//                        } else if (response.startsWith("ROOM_CREATED:")) {
+//                            String[] parts = response.split(":");
+//                            if (parts.length > 1) {
+//                                String roomId = parts[1];
+//                                addNewRoom(roomId);
+//                            }
+//                        } else if (response.startsWith("ERROR:")) {
+//                            handleServerError(response);
+//                        }
+//                    });
+//                }
+//            } catch (IOException e) {
+//                runOnUiThread(() -> {
+//                    Toast.makeText(this, "Mất kết nối với máy chủ", Toast.LENGTH_SHORT).show();
+//                    Log.e("RoomActivity", "Server response listener error", e);
+//                    reconnectToServer();
+//                });
+//            }
+//        });
+//    }
+
+    private void handleServerError(String errorResponse) {
+        Toast.makeText(this, errorResponse.substring(6), Toast.LENGTH_SHORT).show();
+        Log.e("RoomActivity", "Server error: " + errorResponse);
+    }
+
+    private void reconnectToServer() {
+        // Thử kết nối lại với server sau khi mất kết nối
+        try {
+            if (socket != null) {
+                socket.close();
             }
-        });
+            connectToServer();
+        } catch (IOException e) {
+            Log.e("RoomActivity", "Reconnection error", e);
+        }
+    }
+
+    private void filterRooms(String searchText) {
+        // Lọc danh sách phòng theo ID hoặc tên
+        filteredRoomList.clear();
+        if (searchText.isEmpty()) {
+            filteredRoomList.addAll(roomList);
+        } else {
+            filteredRoomList.addAll(
+                    roomList.stream()
+                            .filter(room ->
+                                    room.getId().toLowerCase().contains(searchText.toLowerCase()) ||
+                                            room.getName().toLowerCase().contains(searchText.toLowerCase())
+                            )
+                            .collect(Collectors.toList())
+            );
+        }
+        roomAdapter.notifyDataSetChanged();
     }
 
     private void createRoom(String roomName) {
@@ -125,9 +190,11 @@ public class RoomActivity extends AppCompatActivity {
                         Toast.makeText(this, "Đang tạo phòng...", Toast.LENGTH_SHORT).show();
                     });
                 }
+
             } catch (Exception e) {
                 runOnUiThread(() -> {
                     Toast.makeText(this, "Lỗi: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    Log.e("RoomActivity", "Room creation error", e);
                 });
             }
         });
@@ -135,43 +202,34 @@ public class RoomActivity extends AppCompatActivity {
 
     private void updateRoomList(String response) {
         try {
-            // Kiểm tra định dạng response
             if (!response.startsWith("ROOM_LIST:") || response.length() <= 10) {
-                // Response không hợp lệ
                 return;
             }
 
-            // Lấy phần danh sách phòng
             String roomListString = response.substring(10);
 
-            // Kiểm tra nếu không có phòng
             if (roomListString.isEmpty()) {
                 roomList.clear();
+                filteredRoomList.clear();
                 roomAdapter.notifyDataSetChanged();
                 return;
             }
 
-            // Tách các phòng
             String[] rooms = roomListString.split(",");
             roomList.clear();
 
             for (String roomData : rooms) {
-                // Kiểm tra định dạng dữ liệu phòng
                 String[] details = roomData.split("\\|");
                 if (details.length >= 2) {
-                    // Đảm bảo đủ thông tin để tạo phòng
                     roomList.add(new Room(details[0], details[1]));
                 } else {
-                    // Ghi log hoặc xử lý dữ liệu không đúng định dạng
                     Log.w("RoomActivity", "Invalid room data: " + roomData);
                 }
             }
 
-            // Cập nhật adapter
-            roomAdapter.notifyDataSetChanged();
-
+            // Áp dụng bộ lọc hiện tại (nếu có)
+            filterRooms(roomSearchInput.getText().toString());
         } catch (Exception e) {
-            // Bắt và xử lý các ngoại lệ có thể xảy ra
             Log.e("RoomActivity", "Error updating room list", e);
             Toast.makeText(this, "Lỗi cập nhật danh sách phòng", Toast.LENGTH_SHORT).show();
         }
@@ -181,37 +239,202 @@ public class RoomActivity extends AppCompatActivity {
         // Thêm phòng mới vào danh sách
         Room newRoom = new Room(roomId, roomNameInput.getText().toString());
         roomList.add(newRoom);
-        roomAdapter.notifyItemInserted(roomList.size() - 1);
-
-        // Xóa text input sau khi tạo phòng
-        roomNameInput.setText("");
+        filterRooms(roomSearchInput.getText().toString());
     }
 
     private void onRoomSelected(Room room) {
-        // Chuyển sang màn hình chơi game khi chọn phòng
-        Intent intent = new Intent(this, MainActivity.class);
-        intent.putExtra("ROOM_ID", room.getId());
+        // Prompt for joining the room
+        showJoinRoomDialog(room);
+    }private void showJoinRoomDialog(Room room) {
+        new AlertDialog.Builder(this)
+                .setTitle("Join Room")
+                .setMessage("Do you want to join the room '" + room.getName() + "'?")
+                .setPositiveButton("Join", (dialog, which) -> {
+                    joinRoom(room);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
 
+    private void joinRoom(Room room) {
+        Executors.newSingleThreadExecutor().execute(() -> {
+            try {
+                // Ensure socket connection
+                if (socket == null || socket.isClosed()) {
+                    connectToServer();
+                    Thread.sleep(500);
+                }
+
+                // Send join room request
+                if (printWriter != null) {
+                    printWriter.println("JOIN_ROOM:" + room.getId());
+                }
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Error joining room: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    Log.e("RoomActivity", "Room join error", e);
+                });
+            }
+        });
+    }
+    private void listenToServerResponses() {
+        Executors.newSingleThreadExecutor().execute(() -> {
+            try {
+                String line;
+                while ((line = bufferedReader.readLine()) != null) {
+                    final String response = line;
+                    runOnUiThread(() -> {
+                        // Existing response handling
+                        if (response.startsWith("ROOM_LIST:")) {
+                            updateRoomList(response);
+                        } else if (response.startsWith("ROOM_CREATED:")) {
+                            String[] parts = response.split(":");
+                            if (parts.length > 1) {
+                                addNewRoom(parts[1]); // Thêm phòng mới vào danh sách
+                            }
+                        } else if (response.startsWith("ERROR:")) {
+                            handleServerError(response);
+                        }
+
+                        // New response handling for queue mechanism
+                        if (response.startsWith("WAITING_IN_QUEUE:")) {
+                            handleWaitingInQueue(response);
+                        } else if (response.startsWith("APPROVED_JOIN:")) {
+                            handleApprovedJoin(response);
+                        } else if (response.startsWith("REJECTED_JOIN:")) {
+                            handleRejectedJoin(response);
+                        }
+                    });
+                }
+            } catch (IOException e) {
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Mất kết nối với máy chủ", Toast.LENGTH_SHORT).show();
+                    Log.e("RoomActivity", "Server response listener error", e);
+                    reconnectToServer();
+                });
+            }
+        });
+    }
+
+    private void handleWaitingInQueue(String response) {
+        String roomId = response.split(":")[1];
+        Toast.makeText(this, "Waiting in queue for room " + roomId, Toast.LENGTH_SHORT).show();
+
+        // Optionally, show a dialog indicating waiting status
+        showWaitingDialog(roomId);
+    }
+
+    private void showWaitingDialog(String roomId) {
+        AlertDialog waitingDialog = new AlertDialog.Builder(this)
+                .setTitle("Waiting for Approval")
+                .setMessage("Waiting for room owner to approve your join request...")
+                .setNegativeButton("Cancel", (dialog, which) -> {
+                    // Optional: Send cancel request to server
+                })
+                .create();
+
+        waitingDialog.show();
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    private void handleApprovedJoin(String response) {
+        String roomId = response.split(":")[1];
+        Toast.makeText(this, "Approved to join room " + roomId, Toast.LENGTH_SHORT).show();
+
+        // Navigate to game activity
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.putExtra("ROOM_ID", roomId);
         startActivity(intent);
     }
 
+    private void handleRejectedJoin(String response) {
+        String roomId = response.split(":")[1];
+        Toast.makeText(this, "Join request rejected for room " + roomId, Toast.LENGTH_SHORT).show();
+    }
+
+
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        // Đóng kết nối socket khi activity bị hủy
+        try {
+            if (socket != null) {
+                socket.close();
+            }
+        } catch (IOException e) {
+            Log.e("RoomActivity", "Error closing socket", e);
+        }
+    }
+
     // Lớp Room để lưu thông tin phòng
+
+
+
+
+
     public static class Room {
         private String id;
         private String name;
-        private int currentPlayers; // Số người hiện tại trong phòng
+        private int currentPlayers;
+        private int maxPlayers;
 
         public Room(String id, String name) {
             this.id = id;
             this.name = name;
-            this.currentPlayers = 0; // Khởi tạo số người hiện tại là 0
+            this.currentPlayers = 0;
+            this.maxPlayers = 2; // Mặc định là phòng 2 người chơi
         }
 
         public String getId() { return id; }
         public String getName() { return name; }
         public int getCurrentPlayers() { return currentPlayers; }
-        public void incrementPlayers() { currentPlayers++; } // Tăng số người lên 1
+        public int getMaxPlayers() { return maxPlayers; }
+        public void incrementPlayers() {
+            if (currentPlayers < maxPlayers) {
+                currentPlayers++;
+            }
+        }
+        public boolean isFull() {
+            return currentPlayers >= maxPlayers;
+        }
     }
-
-
 }
